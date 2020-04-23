@@ -1,5 +1,5 @@
-# Lint as: python2, python3
-# Copyright 2019 Google LLC. All Rights Reserved.
+# Lint as: python3
+# Copyright 2020 Google LLC. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,14 +19,13 @@ from __future__ import division
 from __future__ import print_function
 
 import os
-from typing import Text
+from typing import Dict, Optional, Text
 
 import absl
-import tensorflow_model_analysis as tfma
 
 from tfx.components import CsvExampleGen
-from tfx.components import Evaluator
 from tfx.components import ExampleValidator
+from tfx.components import ImporterNode
 from tfx.components import Pusher
 from tfx.components import ResolverNode
 from tfx.components import SchemaGen
@@ -36,6 +35,7 @@ from tfx.components import Transform
 from tfx.components.base import executor_spec
 from tfx.components.trainer.executor import GenericExecutor
 from tfx.dsl.experimental import latest_blessed_model_resolver
+from tfx.extensions.google_cloud_ai_platform.pusher import executor as ai_platform_pusher_executor
 from tfx.orchestration import metadata
 from tfx.orchestration import pipeline
 from tfx.orchestration.beam.beam_dag_runner import BeamDagRunner
@@ -46,15 +46,49 @@ from tfx.types.standard_artifacts import Model
 from tfx.types.standard_artifacts import ModelBlessing
 from tfx.utils.dsl_utils import external_input
 
-_pipeline_name = 'iris_native_keras'
+_pipeline_name = 'iris_sklearn'
+
+# Google Cloud Platform project id to use when deploying this pipeline. Leave
+# blank to run locally.
+_project_id = ''
+
+# Directory and data locations (uses Google Cloud Storage).
+_bucket = 'gs://my-bucket'
+
+# Region to use for Dataflow jobs and AI Platform jobs.
+#   Dataflow: https://cloud.google.com/dataflow/docs/concepts/regional-endpoints
+#   AI Platform: https://cloud.google.com/ml-engine/docs/tensorflow/regions
+_gcp_region = 'us-central1'
+
+# A dict which contains the serving job parameters to be passed to Google
+# Cloud AI Platform. For the full set of parameters supported by Google Cloud AI
+# Platform, refer to
+# https://cloud.google.com/ml-engine/reference/rest/v1/projects.models
+_ai_platform_serving_args = {
+    'model_name': 'iris',
+    'project_id': _project_id,
+    # The region to use when serving the model. See available regions here:
+    # https://cloud.google.com/ml-engine/docs/regions
+    # Note that serving currently only supports a single region:
+    # https://cloud.google.com/ml-engine/reference/rest/v1/projects.models#Model
+    'regions': [_gcp_region],
+    # Scikit-learn and XGBoost are not supported past CAIP version 2.0. This
+    # may change in the future.
+    'runtime_version': '1.15',
+}
+
+# TODO(humichael): This example should be split into local and cloud examples.
+if not _project_id:
+  _bucket = os.environ['HOME']
+  _ai_platform_serving_args = None
 
 # This example assumes that Iris flowers data is stored in ~/iris/data and the
 # utility function is in ~/iris. Feel free to customize as needed.
 _iris_root = os.path.join(os.environ['HOME'], 'iris')
-_data_root = os.path.join(_iris_root, 'data')
+_data_root = os.path.join(_iris_root, 'data', 'simple')
 # Python module file to inject customized logic into the TFX components. The
 # Transform and Trainer both require user-defined functions to run successfully.
-_module_file = os.path.join(_iris_root, 'iris_utils_native_keras.py')
+_module_file = os.path.join(_iris_root, 'iris_utils_sklearn.py')
 # Path which can be listened to by the model server.  Pusher will output the
 # trained model here.
 _serving_model_dir = os.path.join(_iris_root, 'serving_model', _pipeline_name)
@@ -62,16 +96,19 @@ _serving_model_dir = os.path.join(_iris_root, 'serving_model', _pipeline_name)
 # Directory and data locations.  This example assumes all of the flowers
 # example code and metadata library is relative to $HOME, but you can store
 # these files anywhere on your local filesystem.
-_tfx_root = os.path.join(os.environ['HOME'], 'tfx')
+_local_tfx_root = os.path.join(os.environ['HOME'], 'tfx')
+_tfx_root = os.path.join(_bucket, 'tfx')
 _pipeline_root = os.path.join(_tfx_root, 'pipelines', _pipeline_name)
 # Sqlite ML-metadata db path.
-_metadata_path = os.path.join(_tfx_root, 'metadata', _pipeline_name,
+_metadata_path = os.path.join(_local_tfx_root, 'metadata', _pipeline_name,
                               'metadata.db')
+_blessing_path = os.path.join(_iris_root, 'data', 'blessing')
 
 
 def _create_pipeline(pipeline_name: Text, pipeline_root: Text, data_root: Text,
                      module_file: Text, serving_model_dir: Text,
-                     metadata_path: Text,
+                     metadata_path: Text, blessing_path: Text,
+                     ai_platform_serving_args: Optional[Dict[Text, Text]],
                      direct_num_workers: int) -> pipeline.Pipeline:
   """Implements the Iris flowers pipeline with TFX."""
   examples = external_input(data_root)
@@ -105,7 +142,7 @@ def _create_pipeline(pipeline_name: Text, pipeline_root: Text, data_root: Text,
       transform_graph=transform.outputs['transform_graph'],
       schema=schema_gen.outputs['schema'],
       train_args=trainer_pb2.TrainArgs(num_steps=2000),
-      eval_args=trainer_pb2.EvalArgs(num_steps=5))
+      eval_args=trainer_pb2.EvalArgs())
 
   # Get the latest blessed model for model validation.
   model_resolver = ResolverNode(
@@ -114,53 +151,52 @@ def _create_pipeline(pipeline_name: Text, pipeline_root: Text, data_root: Text,
       model=Channel(type=Model),
       model_blessing=Channel(type=ModelBlessing))
 
-  # Uses TFMA to compute an evaluation statistics over features of a model and
-  # perform quality validation of a candidate model (compared to a baseline).
-  eval_config = tfma.EvalConfig(
-      model_specs=[tfma.ModelSpec(label_key='variety')],
-      slicing_specs=[tfma.SlicingSpec()],
-      metrics_specs=[
-          tfma.MetricsSpec(
-              thresholds={
-                  'sparse_categorical_accuracy':
-                      tfma.config.MetricThreshold(
-                          value_threshold=tfma.GenericValueThreshold(
-                              lower_bound={'value': 0.6}),
-                          change_threshold=tfma.GenericChangeThreshold(
-                              direction=tfma.MetricDirection.HIGHER_IS_BETTER,
-                              absolute={'value': -1e-10}))
-              })
-      ])
-  evaluator = Evaluator(
-      examples=example_gen.outputs['examples'],
-      model=trainer.outputs['model'],
-      baseline_model=model_resolver.outputs['model'],
-      # Change threshold will be ignored if there is no baseline (first run).
-      eval_config=eval_config)
-
   # Checks whether the model passed the validation steps and pushes the model
-  # to a file destination if check passed.
+  # to a file destination if check passed. Using a blessing stub because there
+  # is no Evaluator.
+  # TODO(humichael): Remove blessing stub and add Evaluator.
+  blessing_importer = ImporterNode(
+      instance_name='import_blessing',
+      source_uri=blessing_path,
+      artifact_type=ModelBlessing,
+      custom_properties={'blessed': 1})
+
   pusher = Pusher(
       model=trainer.outputs['model'],
-      model_blessing=evaluator.outputs['blessing'],
+      model_blessing=blessing_importer.outputs['result'],
       push_destination=pusher_pb2.PushDestination(
           filesystem=pusher_pb2.PushDestination.Filesystem(
               base_directory=serving_model_dir)))
 
+  components = [
+      example_gen,
+      statistics_gen,
+      schema_gen,
+      example_validator,
+      transform,
+      trainer,
+      model_resolver,
+      blessing_importer,
+      pusher,
+  ]
+
+  if ai_platform_serving_args:
+    cloud_pusher = Pusher(
+        custom_executor_spec=executor_spec.ExecutorClassSpec(
+            ai_platform_pusher_executor.Executor),
+        model=trainer.outputs['model'],
+        model_blessing=blessing_importer.outputs['result'],
+        instance_name='cloud_pusher',
+        custom_config={
+            ai_platform_pusher_executor.SERVING_ARGS_KEY:
+            ai_platform_serving_args,
+        })
+    components.append(cloud_pusher)
+
   return pipeline.Pipeline(
       pipeline_name=pipeline_name,
       pipeline_root=pipeline_root,
-      components=[
-          example_gen,
-          statistics_gen,
-          schema_gen,
-          example_validator,
-          transform,
-          trainer,
-          model_resolver,
-          evaluator,
-          pusher,
-      ],
+      components=components,
       enable_cache=True,
       metadata_connection_config=metadata.sqlite_metadata_connection_config(
           metadata_path),
@@ -170,7 +206,7 @@ def _create_pipeline(pipeline_name: Text, pipeline_root: Text, data_root: Text,
 
 
 # To run this pipeline from the python CLI:
-#   $python iris_pipeline_native_keras.py
+#   $python iris_pipeline_sklearn.py
 if __name__ == '__main__':
   absl.logging.set_verbosity(absl.logging.INFO)
   BeamDagRunner().run(
@@ -181,6 +217,8 @@ if __name__ == '__main__':
           module_file=_module_file,
           serving_model_dir=_serving_model_dir,
           metadata_path=_metadata_path,
+          blessing_path=_blessing_path,
+          ai_platform_serving_args=_ai_platform_serving_args,
           # 0 means auto-detect based on the number of CPUs available during
           # execution time.
           direct_num_workers=0))
