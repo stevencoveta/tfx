@@ -1,6 +1,22 @@
 # Current Version(Still in Development)
 
 ## Major Features and Improvements
+
+## Bug fixes and other changes
+
+## Deprecations
+
+## Breaking changes
+
+## For pipeline authors
+
+## For component authors
+
+## Documentation updates
+
+# Version 0.22.0
+
+## Major Features and Improvements
 *   Implemented a TFJS rewriter.
 *   Introduced experimental Python function component decorator (`@component`
     decorator under `tfx.dsl.component.experimental.decorators`) allowing
@@ -21,17 +37,23 @@
 
 ## Bug fixes and other changes
 
-*   Depends on `apache-beam[gcp]>=2.20,<3`.
-*   Depends on `grpcio>=2.18.1,<3`.
-*   Depends on `kubernetes>=10.0.1,<12`.
-*   Depends on `pyarrow>=0.16,<0.17`.
 *   Removed `python-snappy` from `[all]` extra dependency list.
 *   Tests depends on `apache-airflow>=1.10.10,<2`;
 *   Removed test dependency to tzlocal.
 *   Fixes unintentional overriding of user-specified setup.py file for Dataflow
     jobs when running on KFP container.
-*   Depends on `frozendict>=1,<2`.
 *   Made ComponentSpec().inputs and .outputs behave more like real dictionaries.
+*   Depends on `apache-beam[gcp]>=2.20,<3`.
+*   Depends on `frozendict>=1,<2`.
+*   Depends on `grpcio>=2.18.1,<3`.
+*   Depends on `kubernetes>=10.0.1,<12`.
+*   Depends on `pyarrow>=0.16,<0.17`.
+*   Depends on `tensorflow>=1.15,!=2.0.*,<3`.
+*   Depends on `tensorflow-data-validation>=0.22.0,<0.23.0`.
+*   Depends on `tensorflow-model-analysis>=0.22.1,<0.23.0`.
+*   Depends on `tensorflowserving-api>=1.15,<3`.
+*   Depends on `tensorflow-transform>=0.22.0,<0.23.0`.
+
 
 ### Deprecations
 
