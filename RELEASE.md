@@ -18,6 +18,7 @@
     the supported platforms are Airflow, Beam, and Kubeflow Pipelines. Note that
     this API call should be considered experimental, and may not work with
     asynchronous pipelines, sub-pipelines and pipelines with conditional nodes.
+*   Added the container-based sample pipeline (download, filter, print)
 
 ## Bug fixes and other changes
 
