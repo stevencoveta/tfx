@@ -29,11 +29,14 @@ _TEST_BYTE_DECODED = b'hello world'
 _TEST_STRING_RAW = b'hello world'
 _TEST_STRING_DECODED = u'hello world'
 
-_TEST_INT_RAW = b'\x01%\xe5\x91'
+_TEST_INT_RAW = b'19260817'
 _TEST_INT_DECODED = 19260817
 
-_TEST_FLOAT_RAW = b'@\t!\xfbTA\x17D'
+_TEST_FLOAT_RAW = b'3.1415926535'
 _TEST_FLOAT_DECODED = 3.1415926535
+
+_TEST_FLOAT128_RAW = b'3.14159265358979323846264338327950288'
+_TEST_FLOAT128 = 3.14159265358979323846264338327950288  # Too precise
 
 
 class StandardArtifactsTest(tf.test.TestCase):
@@ -58,6 +61,12 @@ class StandardArtifactsTest(tf.test.TestCase):
     self.assertEqual(_TEST_FLOAT_RAW, instance.encode(_TEST_FLOAT_DECODED))
     self.assertAlmostEqual(_TEST_FLOAT_DECODED,
                            instance.decode(_TEST_FLOAT_RAW))
+
+  def testFloatTypePrecisionLossWarning(self):
+    instance = standard_artifacts.Float()
+    # TODO(b/156776413): with self.assertWarnsRegex('lost precision'):
+    self.assertAlmostEqual(
+        instance.decode(_TEST_FLOAT128_RAW), _TEST_FLOAT128)
 
 
 if __name__ == '__main__':

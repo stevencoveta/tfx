@@ -21,8 +21,9 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import struct
+from decimal import Decimal  # pylint: disable=g-importing-member
 from typing import Text
+import warnings
 
 from tfx.types.artifact import Artifact
 from tfx.types.artifact import Property
@@ -130,10 +131,10 @@ class Integer(ValueArtifact):
     if not isinstance(value, int):
       raise TypeError('Expecting int but got value %s of type %s' %
                       (str(value), type(value)))
-    return struct.pack('>i', value)
+    return str(value).encode('utf-8')
 
   def decode(self, serialized_value: bytes) -> int:
-    return struct.unpack('>i', serialized_value)[0]
+    return int(serialized_value)
 
 
 class Float(ValueArtifact):
@@ -144,10 +145,19 @@ class Float(ValueArtifact):
     if not isinstance(value, float):
       raise TypeError('Expecting float but got value %s of type %s' %
                       (str(value), type(value)))
-    return struct.pack('>d', value)
+    return str(value).encode('utf-8')
 
   def decode(self, serialized_value: bytes) -> float:
-    return struct.unpack('>d', serialized_value)[0]
+    # float() can handle bytes, but Decimal() cannot
+    serialized_value = serialized_value.decode('utf-8')
+    result = float(serialized_value)
+    reserialized_value = str(result)
+    is_exact = Decimal(reserialized_value) == Decimal(serialized_value)
+    if not is_exact:
+      warnings.warn(
+          'The number "{}" has lost precision when converted to float "{}"'
+          .format(serialized_value, reserialized_value))
+    return result
 
 
 class TransformGraph(Artifact):

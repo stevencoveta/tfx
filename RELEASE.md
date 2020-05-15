@@ -18,6 +18,7 @@
     the supported platforms are Airflow, Beam, and Kubeflow Pipelines. Note that
     this API call should be considered experimental, and may not work with
     asynchronous pipelines, sub-pipelines and pipelines with conditional nodes.
+*   Changed the encoding of the Integer and Float artifacts to be more portable.
 
 ## Bug fixes and other changes
 
