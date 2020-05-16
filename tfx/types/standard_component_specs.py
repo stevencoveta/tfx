@@ -315,6 +315,30 @@ class TrainerSpec(ComponentSpec):
   }
 
 
+class TunerSpec(ComponentSpec):
+  """ComponentSpec for TFX Tuner Component."""
+
+  PARAMETERS = {
+      'module_file': ExecutionParameter(type=(str, Text), optional=True),
+      'tuner_fn': ExecutionParameter(type=(str, Text), optional=True),
+      'train_args': ExecutionParameter(type=trainer_pb2.TrainArgs),
+      'eval_args': ExecutionParameter(type=trainer_pb2.EvalArgs),
+  }
+  INPUTS = {
+      'examples':
+          ChannelParameter(type=standard_artifacts.Examples),
+      'schema':
+          ChannelParameter(type=standard_artifacts.Schema, optional=True),
+      'transform_graph':
+          ChannelParameter(
+              type=standard_artifacts.TransformGraph, optional=True),
+  }
+  OUTPUTS = {
+      'best_hyperparameters':
+          ChannelParameter(type=standard_artifacts.HyperParameters),
+  }
+
+
 class TransformSpec(ComponentSpec):
   """Transform component spec."""
 
