@@ -58,6 +58,22 @@ message RuntimeParameter {
   ml_metadata.Value default_value = 3;
 }
 
+// Definition for template based runtime parameters.
+// This can be used to combine several runtime parameters into a single string.
+// For example, a TemplateRuntimeParameter with template:
+//   "{{a}}_X_{{b}}"
+// Here we need two RuntimeParameter instances with names 'a' and 'b' to fill in
+// the template.
+message TemplateRuntimeParameter {
+  // Default value of the runtime parameter.
+  repeated RuntimeParameter runtime_parameters = 1;
+  // The template of the TemplateRuntimeParameter. Note that the template will
+  // always follow double curly brackets format: '{{runtime_parameter_name}}'.
+  // During compile time, we will check to ensure the template is well-formed,
+  // with the placeholders matching the runtime parameters.
+  string runtime_parameter_template = 2;
+}
+
 // Definition for Value in uDSL IR. A Value instance can be either a field value
 // that is determined during compilation time, or a runtime parameter which will
 // be determined during runtime.
@@ -65,6 +81,7 @@ message Value {
   oneof value {
     ml_metadata.Value field_value = 1;
     RuntimeParameter runtime_parameter = 2;
+    TemplateRuntimeParameter template_runtime_parameter = 3;
   }
 }
 
@@ -152,14 +169,21 @@ message InputSpec {
     message ArtifactQuery {
       // The type of the artifact.
       ml_metadata.ArtifactType type = 1;
-      // The output name of the artifact.
-      string output_name = 2;
       // Predicate on the artifact properties.
-      PropertyPredicate property_predicate = 3;
+      PropertyPredicate property_predicate = 2;
     }
     ProducerNodeQuery producer_node_query = 1;
-    repeated ContextQuery context_query = 2;
+    repeated ContextQuery context_queries = 2;
     ArtifactQuery artifact_query = 3;
+    // The output key of the channel. Consider a `Trainer` with two output
+    // channels: when downstream nodes consume its outputs, output key(s) need
+    // to be specified:
+    // ```
+    // evaluator = tfx.Evaluator(model=trainer.outputs['some_output_key'])
+    // ```
+    // where 'some_output_key' is the output key for the channel that evaluator
+    // uses as one of its input.
+    string output_key = 4;
   }
   repeated Channel channels = 1;
   // The minimum number of artifacts desired. If minimum requirement is not met,
