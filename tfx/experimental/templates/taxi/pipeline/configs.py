@@ -92,18 +92,21 @@ _query_sample_rate = 0.0001  # Generate a 0.01% random sample.
 #    query_sample_rate=_query_sample_rate)
 
 # Beam args to run data processing on DataflowRunner.
+# TODO(tensorflow/tfx#1459) Remove `disk_size_gb` after default is increased.  # pylint: disable=g-bad-todo
 # TODO(b/151114974): Remove `disk_size_gb` flag after default is increased.
+# TODO(tensorflow/tfx#1461) Remove `shuffle_mode` after default is changed.  # pylint: disable=g-bad-todo
 # TODO(b/151116587): Remove `shuffle_mode` flag after default is changed.
+# TODO(tensorflow/tfx#1823) Remove `machine_type` after quota issue is resolved.  # pylint: disable=g-bad-todo
+# TODO(b/156874687): Remove `machine_type` flag after quota issue is resolved.
 # TODO(step 8): (Optional) Uncomment below to use Dataflow.
 # DATAFLOW_BEAM_PIPELINE_ARGS = [
 #    '--project=' + GCP_PROJECT_ID,
 #    '--runner=DataflowRunner',
 #    '--temp_location=' + os.path.join('gs://', GCS_BUCKET_NAME, 'tmp'),
 #    '--region=' + GCP_REGION,
-#    # TODO(tensorflow/tfx#1461) Remove `shuffle_mode` after default is changed.  # pylint: disable=g-bad-todo
+#
+#    # Temporary overrides of defaults.
 #    '--experiments=shuffle_mode=auto',
-#    # TODO(tensorflow/tfx#1459) Remove `disk_size_gb` after default is
-#    #                           increased.  # pylint: disable=g-bad-todo
 #    '--disk_size_gb=50',
 #    # If you are blocked by IP Address quota, using a bigger machine_type will
 #    # reduce the number of needed IPs.

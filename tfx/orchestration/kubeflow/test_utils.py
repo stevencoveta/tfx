@@ -531,11 +531,14 @@ class BaseKubeflowTest(tf.test.TestCase):
     pipeline = self._create_pipeline(pipeline_name, components)
     pipeline.beam_pipeline_args = [
         '--runner=DataflowRunner',
-        '--experiments=shuffle_mode=auto',
         '--project=' + self._gcp_project_id,
         '--temp_location=' +
         os.path.join(self._pipeline_root(pipeline_name), 'tmp'),
         '--region=' + self._gcp_region,
+        # Temporary overrides of defaults.
+        # TODO(b/151116587): Remove `shuffle_mode` flag after default is
+        #                    changed.
+        '--experiments=shuffle_mode=auto',
     ]
     return pipeline
 
@@ -606,4 +609,3 @@ class BaseKubeflowTest(tf.test.TestCase):
         'Succeeded', status, 'Pipeline {} failed to complete successfully: {}'
         '\nFailed workflow logs:\n{}'.format(pipeline_name, status,
                                              logs_output))
-
