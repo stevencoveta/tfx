@@ -57,7 +57,11 @@ def make_required_test_packages():
   # Note: It is okay to pin packages to exact verions in this list to minimize
   # conflicts.
   return [
-      'apache-airflow>=1.10.10,<2',
+      'apache-airflow[mysql]>=1.10.10,<2',
+      # TODO(b/157033885): Remove pinned version of flask-admin and WTForms
+      # after newer version of Airflow.
+      'flask-admin==1.5.6',
+      'WTForms==2.2.1',
       'kfp>=0.4,<0.5',
       'pytest>=5,<6',
   ]
